@@ -1,0 +1,12 @@
+# Exclude from Railway builds
+node_modules/
+npm-debug.log*
+.git/
+.gitignore
+README.md
+*.md
+.env
+.env.*
+uploads/
+models/
+*.log

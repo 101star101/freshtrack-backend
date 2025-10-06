@@ -1,0 +1,278 @@
+{
+  "apple": {
+    "storage": "Refrigerate in crisper drawer",
+    "shelf_life": 14,
+    "tips": "Store away from other fruits to prevent ripening",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "banana": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Keep away from other fruits, wrap stem in plastic",
+    "signs_of_spoilage": "Black spots, mushy texture, strong odor"
+  },
+  "orange": {
+    "storage": "Store at room temperature or refrigerate",
+    "shelf_life": 14,
+    "tips": "Store in mesh bag for air circulation",
+    "signs_of_spoilage": "Soft spots, mold, dry texture"
+  },
+  "tomato": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Store stem-side down to prevent bruising",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "carrot": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 21,
+    "tips": "Remove green tops before storing",
+    "signs_of_spoilage": "Soft texture, white spots, mold"
+  },
+  "broccoli": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 7,
+    "tips": "Store in high humidity drawer",
+    "signs_of_spoilage": "Yellowing, soft stems, strong odor"
+  },
+  "lettuce": {
+    "storage": "Refrigerate in plastic bag with paper towel",
+    "shelf_life": 7,
+    "tips": "Keep dry to prevent wilting",
+    "signs_of_spoilage": "Wilting, brown edges, slimy texture"
+  },
+  "cucumber": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 7,
+    "tips": "Store away from ethylene-producing fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "bell_pepper": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 7,
+    "tips": "Store in crisper drawer",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "onion": {
+    "storage": "Store in cool, dry, dark place",
+    "shelf_life": 30,
+    "tips": "Keep away from potatoes",
+    "signs_of_spoilage": "Soft spots, mold, sprouting"
+  },
+  "potato": {
+    "storage": "Store in cool, dark, dry place",
+    "shelf_life": 30,
+    "tips": "Keep away from onions",
+    "signs_of_spoilage": "Green spots, soft spots, sprouting"
+  },
+  "garlic": {
+    "storage": "Store in cool, dry, dark place",
+    "shelf_life": 60,
+    "tips": "Keep in mesh bag for air circulation",
+    "signs_of_spoilage": "Soft cloves, mold, green shoots"
+  },
+  "ginger": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 21,
+    "tips": "Can be frozen for longer storage",
+    "signs_of_spoilage": "Soft texture, mold, wrinkled skin"
+  },
+  "mushroom": {
+    "storage": "Refrigerate in paper bag",
+    "shelf_life": 7,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Slimy texture, dark spots, strong odor"
+  },
+  "spinach": {
+    "storage": "Refrigerate in plastic bag with paper towel",
+    "shelf_life": 5,
+    "tips": "Keep dry to prevent wilting",
+    "signs_of_spoilage": "Wilting, yellowing, slimy texture"
+  },
+  "kale": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 7,
+    "tips": "Store in high humidity drawer",
+    "signs_of_spoilage": "Wilting, yellowing, slimy texture"
+  },
+  "celery": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 14,
+    "tips": "Wrap in aluminum foil to keep crisp",
+    "signs_of_spoilage": "Wilting, soft texture, strong odor"
+  },
+  "radish": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 14,
+    "tips": "Remove greens before storing",
+    "signs_of_spoilage": "Soft texture, mold, wrinkled skin"
+  },
+  "beetroot": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 21,
+    "tips": "Remove greens before storing",
+    "signs_of_spoilage": "Soft texture, mold, wrinkled skin"
+  },
+  "turnip": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 21,
+    "tips": "Remove greens before storing",
+    "signs_of_spoilage": "Soft texture, mold, wrinkled skin"
+  },
+  "parsnip": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 21,
+    "tips": "Store in high humidity drawer",
+    "signs_of_spoilage": "Soft texture, mold, wrinkled skin"
+  },
+  "rutabaga": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 30,
+    "tips": "Store in high humidity drawer",
+    "signs_of_spoilage": "Soft texture, mold, wrinkled skin"
+  },
+  "sweet_potato": {
+    "storage": "Store in cool, dark, dry place",
+    "shelf_life": 30,
+    "tips": "Don't refrigerate",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "yam": {
+    "storage": "Store in cool, dark, dry place",
+    "shelf_life": 30,
+    "tips": "Don't refrigerate",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "taro": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 14,
+    "tips": "Store in high humidity drawer",
+    "signs_of_spoilage": "Soft texture, mold, wrinkled skin"
+  },
+  "cassava": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 7,
+    "tips": "Store in high humidity drawer",
+    "signs_of_spoilage": "Soft texture, mold, wrinkled skin"
+  },
+  "plantain": {
+    "storage": "Store at room temperature until ripe",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Black spots, mushy texture, strong odor"
+  },
+  "papaya": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "mango": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "pineapple": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "strawberry": {
+    "storage": "Refrigerate in original container",
+    "shelf_life": 7,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Mold, soft spots, wrinkled skin"
+  },
+  "blueberry": {
+    "storage": "Refrigerate in original container",
+    "shelf_life": 10,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Mold, soft spots, wrinkled skin"
+  },
+  "raspberry": {
+    "storage": "Refrigerate in original container",
+    "shelf_life": 5,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Mold, soft spots, wrinkled skin"
+  },
+  "blackberry": {
+    "storage": "Refrigerate in original container",
+    "shelf_life": 5,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Mold, soft spots, wrinkled skin"
+  },
+  "grape": {
+    "storage": "Refrigerate in original container",
+    "shelf_life": 14,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Mold, soft spots, wrinkled skin"
+  },
+  "peach": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "plum": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "apricot": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "cherry": {
+    "storage": "Refrigerate in original container",
+    "shelf_life": 7,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Mold, soft spots, wrinkled skin"
+  },
+  "nectarine": {
+    "storage": "Store at room temperature until ripe, then refrigerate",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "fig": {
+    "storage": "Refrigerate in plastic bag",
+    "shelf_life": 7,
+    "tips": "Store away from other fruits",
+    "signs_of_spoilage": "Soft spots, mold, wrinkled skin"
+  },
+  "date": {
+    "storage": "Store in cool, dry place or refrigerate",
+    "shelf_life": 180,
+    "tips": "Store in airtight container",
+    "signs_of_spoilage": "Mold, hard texture, off odor"
+  },
+  "prune": {
+    "storage": "Store in cool, dry place or refrigerate",
+    "shelf_life": 180,
+    "tips": "Store in airtight container",
+    "signs_of_spoilage": "Mold, hard texture, off odor"
+  },
+  "raisin": {
+    "storage": "Store in cool, dry place or refrigerate",
+    "shelf_life": 180,
+    "tips": "Store in airtight container",
+    "signs_of_spoilage": "Mold, hard texture, off odor"
+  },
+  "cranberry": {
+    "storage": "Refrigerate in original container",
+    "shelf_life": 30,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Mold, soft spots, wrinkled skin"
+  },
+  "currant": {
+    "storage": "Refrigerate in original container",
+    "shelf_life": 7,
+    "tips": "Don't wash until ready to use",
+    "signs_of_spoilage": "Mold, soft spots, wrinkled skin"
+  }
+}
