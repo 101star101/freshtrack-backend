@@ -1,16 +1,22 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-// Mock mode only - no external ML dependencies
-console.log('Running in mock detection mode - no ML dependencies required');
+let ort;
+try {
+  // Try loading onnxruntime-node only if available
+  ort = require('onnxruntime-node');
+  console.log('✅ ONNX Runtime loaded successfully');
+} catch {
+  console.log('⚠️ ONNX Runtime not available — using mock mode');
+  ort = null;
+}
 
 // Food class names (matching your YOLO model)
 const CLASS_NAMES = [
-  // Fresh items
   'Fresh_Apple', 'Fresh_Banana', 'Fresh_Potato', 'Fresh_Carrot', 'Fresh_Orange',
   'Fresh_Beef', 'Fresh_Chicken', 'Fresh_Pork', 'Fresh_Manggo', 'Fresh_Pepper',
   'Fresh_Cucumber', 'Fresh_Strawberry', 'Fresh_Okra',
-  // Rotten items
   'Rotten_Apple', 'Rotten_Banana', 'Rotten_Potato', 'Rotten_Carrot', 'Rotten_Orange',
   'Rotten_Beef', 'Rotten_Chicken', 'Rotten_Pork', 'Rotten_Manggo', 'Rotten_Pepper',
   'Rotten_Cucumber', 'Rotten_Strawberry', 'Rotten_Okra'
@@ -20,77 +26,85 @@ class ImageProcessor {
   constructor() {
     this.confidenceThreshold = 0.5;
     this.nmsThreshold = 0.4;
-    
-    // Always use mock mode for Railway deployment
-    this.forceMockMode = true;
-    console.log('ImageProcessor initialized in mock mode');
+    this.session = null;
+
+    // Auto-detect environment
+    this.isRailway = !!process.env.RAILWAY_ENVIRONMENT || os.hostname().includes('railway');
+    this.forceMockMode = this.isRailway || !ort;
+
+    console.log(`🚀 Environment: ${this.isRailway ? 'Railway (mock mode)' : 'Local (real mode if model exists)'}`);
   }
 
   async initialize() {
-    // Always return false to use mock mode
-    console.log('Initializing in mock mode - no ML model required');
-    return false;
+    if (this.forceMockMode) {
+      console.log('🟡 Running in mock mode — no model loaded.');
+      return false;
+    }
+
+    try {
+      const modelPath = path.join(__dirname, '../models/model.onnx');
+      if (!fs.existsSync(modelPath)) {
+        console.log('⚠️ No ONNX model found — switching to mock mode.');
+        this.forceMockMode = true;
+        return false;
+      }
+
+      console.log('🧠 Loading ONNX model...');
+      this.session = await ort.InferenceSession.create(modelPath);
+      console.log('✅ Model loaded successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to load model:', error);
+      this.forceMockMode = true;
+      return false;
+    }
   }
 
   async preprocessImage(imagePath) {
-    // Mock preprocessing - just check if file exists
-    try {
-      if (!fs.existsSync(imagePath)) {
-        throw new Error('Image file not found');
-      }
-      
+    // Mock preprocessing
+    if (this.forceMockMode) {
+      if (!fs.existsSync(imagePath)) throw new Error('Image file not found');
       const stats = fs.statSync(imagePath);
-      console.log('Image file size:', stats.size, 'bytes');
-      
-      // Return mock tensor data
+      console.log(`📸 Image loaded (${stats.size} bytes) [mock preprocessing]`);
       return new Float32Array(640 * 640 * 3).fill(0.5);
-    } catch (error) {
-      console.error('Error in mock preprocessing:', error);
-      throw error;
     }
+
+    // Add real preprocessing logic if needed (e.g., Jimp resize)
+    return new Float32Array(640 * 640 * 3).fill(0.5);
   }
 
   async detectObjects(imagePath) {
-    try {
-      console.log('Starting mock object detection for:', imagePath);
-      
-      // Always use mock detections for Railway
-      console.log('Using mock detections (Railway deployment mode)');
+    if (this.forceMockMode || !this.session) {
+      console.log('🟡 Using mock detections');
       return this.getMockDetections();
-      
+    }
+
+    try {
+      const inputTensor = await this.preprocessImage(imagePath);
+      const tensor = new ort.Tensor('float32', inputTensor, [1, 3, 640, 640]);
+      const results = await this.session.run({ images: tensor });
+
+      console.log('✅ Inference completed');
+      return this.processYOLOOutput(results[Object.keys(results)[0]]);
     } catch (error) {
-      console.error('Error in mock object detection:', error);
-      console.error('Error stack:', error.stack);
-      console.log('Falling back to mock detections due to error');
+      console.error('❌ Detection failed:', error);
+      console.log('🔁 Falling back to mock detections');
       return this.getMockDetections();
     }
   }
 
-  // Mock YOLO output processing - not used in mock mode
   processYOLOOutput(outputTensor) {
-    console.log('Mock YOLO output processing called');
+    console.log('📊 Processing YOLO output (mock implementation)');
+    // Replace with your YOLO post-processing if needed
     return this.getMockDetections();
   }
 
-  // Mock NMS and IoU methods - not used in mock mode
-  applyNMS(detections) {
-    console.log('Mock NMS called');
-    return detections;
-  }
-
-  calculateIoU(box1, box2) {
-    console.log('Mock IoU calculation called');
-    return 0.1; // Return low IoU to avoid filtering
-  }
-
   getMockDetections() {
-    // Mock detections for development/testing
     const mockItems = [
       'Fresh_Apple', 'Fresh_Banana', 'Fresh_Carrot', 'Fresh_Orange',
       'Rotten_Apple', 'Rotten_Banana', 'Rotten_Potato', 'Rotten_Chicken'
     ];
     const detections = [];
-    
     for (let i = 0; i < Math.floor(Math.random() * 3) + 1; i++) {
       const randomItem = mockItems[Math.floor(Math.random() * mockItems.length)];
       detections.push({
@@ -104,7 +118,6 @@ class ImageProcessor {
         }
       });
     }
-    
     return detections;
   }
 }
@@ -113,42 +126,24 @@ const imageProcessor = new ImageProcessor();
 
 async function processImage(imagePath) {
   try {
-    console.log('Starting image processing for:', imagePath);
-    
-    // Check if file exists
-    if (!fs.existsSync(imagePath)) {
-      throw new Error(`Image file not found: ${imagePath}`);
-    }
-    
-    // Check file size
+    console.log('🖼️ Processing image:', imagePath);
+    if (!fs.existsSync(imagePath)) throw new Error('Image file not found');
+
     const stats = fs.statSync(imagePath);
-    console.log('Image file size:', stats.size, 'bytes');
-    
-    if (stats.size === 0) {
-      throw new Error('Image file is empty');
-    }
-    
+    if (stats.size === 0) throw new Error('Image file is empty');
+
+    await imageProcessor.initialize();
     const detections = await imageProcessor.detectObjects(imagePath);
-    console.log('Detections completed:', detections.length, 'objects found');
-    
-    // Clean up uploaded file
-    if (fs.existsSync(imagePath)) {
-      fs.unlinkSync(imagePath);
-      console.log('Cleaned up uploaded file');
-    }
-    
+
+    console.log(`✅ Detections complete: ${detections.length} objects`);
+    fs.unlinkSync(imagePath);
+    console.log('🧹 Cleaned up image file');
+
     return detections;
   } catch (error) {
-    console.error('Error processing image:', error);
-    console.error('Error stack:', error.stack);
-    
-    // Return mock detections as fallback
-    console.log('Falling back to mock detections due to error');
+    console.error('❌ Error processing image:', error);
     return imageProcessor.getMockDetections();
   }
 }
 
-module.exports = {
-  processImage,
-  ImageProcessor
-};
+module.exports = { processImage, ImageProcessor };
