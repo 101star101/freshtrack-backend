@@ -18,21 +18,25 @@ class ImageProcessor {
     }
   }
 
-  // ✅ Fixed Jimp import and image processing
-  async preprocessImage(imagePath) {
-  // Dynamically import the correct Jimp class
+ async preprocessImage(imagePath) {
+  // ✅ Load Jimp dynamically (for ESM)
   const jimpModule = await import('jimp');
-  const Jimp = jimpModule.Jimp; // ✅ Correct way for Jimp 1.6+
+  const Jimp = jimpModule.Jimp;
 
   if (!fs.existsSync(imagePath)) {
     throw new Error(`Image file not found: ${imagePath}`);
   }
 
+  console.log('📸 Preprocessing image:', imagePath);
   const image = await Jimp.read(imagePath);
-  image.resize(640, 640);
 
+  // ✅ New resize API for Jimp v1.6+
+  await image.resize({ w: 640, h: 640 });
+
+  // Convert to Float32Array [1, 3, 640, 640]
   const input = new Float32Array(3 * 640 * 640);
   let i = 0;
+
   for (let y = 0; y < 640; y++) {
     for (let x = 0; x < 640; x++) {
       const { r, g, b } = Jimp.intToRGBA(image.getPixelColor(x, y));
@@ -42,8 +46,10 @@ class ImageProcessor {
     }
   }
 
+  console.log('✅ Image preprocessing complete.');
   return new ort.Tensor('float32', input, [1, 3, 640, 640]);
 }
+
 
 
   async detectObjects(imagePath) {
