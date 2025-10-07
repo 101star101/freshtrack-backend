@@ -1,18 +1,9 @@
-const path = require('path');
+const ort = require('onnxruntime-node');
 const fs = require('fs');
-const os = require('os');
+const path = require('path');
+const Jimp = require('jimp');
 
-let ort;
-try {
-  // Try loading onnxruntime-node only if available
-  ort = require('onnxruntime-node');
-  console.log('✅ ONNX Runtime loaded successfully');
-} catch {
-  console.log('⚠️ ONNX Runtime not available — using mock mode');
-  ort = null;
-}
-
-// Food class names (matching your YOLO model)
+// Food classes (match your training)
 const CLASS_NAMES = [
   'Fresh_Apple', 'Fresh_Banana', 'Fresh_Potato', 'Fresh_Carrot', 'Fresh_Orange',
   'Fresh_Beef', 'Fresh_Chicken', 'Fresh_Pork', 'Fresh_Manggo', 'Fresh_Pepper',
@@ -24,126 +15,106 @@ const CLASS_NAMES = [
 
 class ImageProcessor {
   constructor() {
-    this.confidenceThreshold = 0.5;
-    this.nmsThreshold = 0.4;
+    this.modelPath = process.env.MODEL_PATH || path.join(__dirname, '../models/best.onnx');
+    this.confidenceThreshold = 0.4;
+    this.nmsThreshold = 0.45;
     this.session = null;
-
-    // Auto-detect environment
-    this.isRailway = !!process.env.RAILWAY_ENVIRONMENT || os.hostname().includes('railway');
-    this.forceMockMode = this.isRailway || !ort;
-
-    console.log(`🚀 Environment: ${this.isRailway ? 'Railway (mock mode)' : 'Local (real mode if model exists)'}`);
   }
 
   async initialize() {
-    if (this.forceMockMode) {
-      console.log('🟡 Running in mock mode — no model loaded.');
-      return false;
-    }
-
     try {
-      const modelPath = path.join(__dirname, '../models/model.onnx');
-      if (!fs.existsSync(modelPath)) {
-        console.log('⚠️ No ONNX model found — switching to mock mode.');
-        this.forceMockMode = true;
-        return false;
-      }
-
-      console.log('🧠 Loading ONNX model...');
-      this.session = await ort.InferenceSession.create(modelPath);
-      console.log('✅ Model loaded successfully');
+      console.log('Loading YOLOv8 model from:', this.modelPath);
+      if (!fs.existsSync(this.modelPath)) throw new Error('Model file not found');
+      this.session = await ort.InferenceSession.create(this.modelPath);
+      console.log('✅ YOLOv8 ONNX model loaded successfully.');
       return true;
-    } catch (error) {
-      console.error('❌ Failed to load model:', error);
-      this.forceMockMode = true;
+    } catch (err) {
+      console.error('❌ Failed to load model:', err);
       return false;
     }
   }
 
   async preprocessImage(imagePath) {
-    // Mock preprocessing
-    if (this.forceMockMode) {
-      if (!fs.existsSync(imagePath)) throw new Error('Image file not found');
-      const stats = fs.statSync(imagePath);
-      console.log(`📸 Image loaded (${stats.size} bytes) [mock preprocessing]`);
-      return new Float32Array(640 * 640 * 3).fill(0.5);
-    }
-
-    // Add real preprocessing logic if needed (e.g., Jimp resize)
-    return new Float32Array(640 * 640 * 3).fill(0.5);
+    const image = await Jimp.read(imagePath);
+    image.resize(640, 640);
+    const imgData = Float32Array.from(image.bitmap.data)
+      .filter((_, i) => i % 4 !== 3)
+      .map(v => v / 255.0);
+    return new ort.Tensor('float32', imgData, [1, 3, 640, 640]);
   }
 
   async detectObjects(imagePath) {
-    if (this.forceMockMode || !this.session) {
-      console.log('🟡 Using mock detections');
-      return this.getMockDetections();
-    }
-
     try {
-      const inputTensor = await this.preprocessImage(imagePath);
-      const tensor = new ort.Tensor('float32', inputTensor, [1, 3, 640, 640]);
-      const results = await this.session.run({ images: tensor });
+      if (!this.session) {
+        const ok = await this.initialize();
+        if (!ok) throw new Error('Model not initialized');
+      }
 
-      console.log('✅ Inference completed');
-      return this.processYOLOOutput(results[Object.keys(results)[0]]);
-    } catch (error) {
-      console.error('❌ Detection failed:', error);
-      console.log('🔁 Falling back to mock detections');
-      return this.getMockDetections();
+      const inputTensor = await this.preprocessImage(imagePath);
+      const feeds = { images: inputTensor };
+      const results = await this.session.run(feeds);
+      const output = results[Object.keys(results)[0]];
+
+      const detections = this.processYOLOOutput(output.data);
+      return this.applyNMS(detections);
+    } catch (err) {
+      console.error('Error during YOLO detection:', err);
+      return [];
     }
   }
 
-  processYOLOOutput(outputTensor) {
-    console.log('📊 Processing YOLO output (mock implementation)');
-    // Replace with your YOLO post-processing if needed
-    return this.getMockDetections();
-  }
-
-  getMockDetections() {
-    const mockItems = [
-      'Fresh_Apple', 'Fresh_Banana', 'Fresh_Carrot', 'Fresh_Orange',
-      'Rotten_Apple', 'Rotten_Banana', 'Rotten_Potato', 'Rotten_Chicken'
-    ];
+  processYOLOOutput(output) {
     const detections = [];
-    for (let i = 0; i < Math.floor(Math.random() * 3) + 1; i++) {
-      const randomItem = mockItems[Math.floor(Math.random() * mockItems.length)];
+    const numElements = output.length / (5 + CLASS_NAMES.length);
+    for (let i = 0; i < numElements; i++) {
+      const offset = i * (5 + CLASS_NAMES.length);
+      const x = output[offset];
+      const y = output[offset + 1];
+      const w = output[offset + 2];
+      const h = output[offset + 3];
+      const conf = output[offset + 4];
+      if (conf < this.confidenceThreshold) continue;
+      const classScores = output.slice(offset + 5, offset + 5 + CLASS_NAMES.length);
+      const classId = classScores.indexOf(Math.max(...classScores));
       detections.push({
-        label: randomItem,
-        confidence: 0.8 + Math.random() * 0.2,
-        bbox: {
-          x: Math.random() * 0.6,
-          y: Math.random() * 0.6,
-          width: 0.1 + Math.random() * 0.2,
-          height: 0.1 + Math.random() * 0.2
-        }
+        label: CLASS_NAMES[classId],
+        confidence: conf,
+        bbox: { x, y, width: w, height: h }
       });
     }
     return detections;
   }
-}
 
-const imageProcessor = new ImageProcessor();
+  applyNMS(detections) {
+    const result = [];
+    detections.sort((a, b) => b.confidence - a.confidence);
+    for (const det of detections) {
+      if (!result.some(r => this.calculateIoU(r.bbox, det.bbox) > this.nmsThreshold)) {
+        result.push(det);
+      }
+    }
+    return result;
+  }
 
-async function processImage(imagePath) {
-  try {
-    console.log('🖼️ Processing image:', imagePath);
-    if (!fs.existsSync(imagePath)) throw new Error('Image file not found');
-
-    const stats = fs.statSync(imagePath);
-    if (stats.size === 0) throw new Error('Image file is empty');
-
-    await imageProcessor.initialize();
-    const detections = await imageProcessor.detectObjects(imagePath);
-
-    console.log(`✅ Detections complete: ${detections.length} objects`);
-    fs.unlinkSync(imagePath);
-    console.log('🧹 Cleaned up image file');
-
-    return detections;
-  } catch (error) {
-    console.error('❌ Error processing image:', error);
-    return imageProcessor.getMockDetections();
+  calculateIoU(a, b) {
+    const x1 = Math.max(a.x, b.x);
+    const y1 = Math.max(a.y, b.y);
+    const x2 = Math.min(a.x + a.width, b.x + b.width);
+    const y2 = Math.min(a.y + a.height, b.y + b.height);
+    const interArea = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+    const unionArea = a.width * a.height + b.width * b.height - interArea;
+    return interArea / unionArea;
   }
 }
 
-module.exports = { processImage, ImageProcessor };
+const processor = new ImageProcessor();
+
+async function processImage(imagePath) {
+  const detections = await processor.detectObjects(imagePath);
+  try {
+    fs.unlinkSync(imagePath);
+  } catch {}
+  return detections;
+}
+
+module.exports = { processImage };
