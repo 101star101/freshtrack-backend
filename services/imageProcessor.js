@@ -20,25 +20,31 @@ class ImageProcessor {
 
   // ✅ Fixed Jimp import and image processing
   async preprocessImage(imagePath) {
-    const { default: Jimp } = await import("jimp"); // ✅ dynamic import fix
+  // Dynamically import the correct Jimp class
+  const jimpModule = await import('jimp');
+  const Jimp = jimpModule.Jimp; // ✅ Correct way for Jimp 1.6+
 
-    const buffer = fs.readFileSync(imagePath);
-    const image = await Jimp.read(buffer);
-
-    image.resize(640, 640);
-    const input = new Float32Array(3 * 640 * 640);
-    let i = 0;
-    for (let y = 0; y < 640; y++) {
-      for (let x = 0; x < 640; x++) {
-        const { r, g, b } = Jimp.intToRGBA(image.getPixelColor(x, y));
-        input[i++] = r / 255.0;
-        input[i++] = g / 255.0;
-        input[i++] = b / 255.0;
-      }
-    }
-
-    return new ort.Tensor("float32", input, [1, 3, 640, 640]);
+  if (!fs.existsSync(imagePath)) {
+    throw new Error(`Image file not found: ${imagePath}`);
   }
+
+  const image = await Jimp.read(imagePath);
+  image.resize(640, 640);
+
+  const input = new Float32Array(3 * 640 * 640);
+  let i = 0;
+  for (let y = 0; y < 640; y++) {
+    for (let x = 0; x < 640; x++) {
+      const { r, g, b } = Jimp.intToRGBA(image.getPixelColor(x, y));
+      input[i++] = r / 255;
+      input[i++] = g / 255;
+      input[i++] = b / 255;
+    }
+  }
+
+  return new ort.Tensor('float32', input, [1, 3, 640, 640]);
+}
+
 
   async detectObjects(imagePath) {
     await this.loadModel();
