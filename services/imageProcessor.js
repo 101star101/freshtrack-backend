@@ -1,6 +1,5 @@
 const fs = require("fs");
 const ort = require("onnxruntime-node");
-const Jimp = require("jimp");
 
 const MODEL_PATH = process.env.MODEL_PATH || "./models/best.onnx";
 const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.5;
@@ -19,12 +18,13 @@ class ImageProcessor {
     }
   }
 
-  // ✅ Fixed and stable image pre-processing
+  // ✅ Fixed Jimp import and image processing
   async preprocessImage(imagePath) {
+    const { default: Jimp } = await import("jimp"); // ✅ dynamic import fix
+
     const buffer = fs.readFileSync(imagePath);
     const image = await Jimp.read(buffer);
 
-    // Resize image to 640x640 and normalize to [0,1]
     image.resize(640, 640);
     const input = new Float32Array(3 * 640 * 640);
     let i = 0;
@@ -53,7 +53,6 @@ class ImageProcessor {
     return detections;
   }
 
-  // ✅ Multi-object detection with NMS
   postprocess(output) {
     const data = output.data;
     const numPredictions = output.dims[1];
@@ -69,44 +68,33 @@ class ImageProcessor {
       const conf = data[offset + 4];
 
       if (conf >= CONFIDENCE_THRESHOLD) {
-        detections.push({
-          x,
-          y,
-          width: w,
-          height: h,
-          confidence: conf,
-        });
+        detections.push({ x, y, width: w, height: h, confidence: conf });
       }
     }
 
-    // Apply Non-Maximum Suppression to avoid overlapping boxes
     return this.nonMaxSuppression(detections, NMS_THRESHOLD);
   }
 
-  // ✅ Basic NMS implementation
   nonMaxSuppression(boxes, threshold) {
     if (boxes.length === 0) return [];
-
     boxes.sort((a, b) => b.confidence - a.confidence);
 
     const selected = [];
-    const iou = (boxA, boxB) => {
-      const xA = Math.max(boxA.x, boxB.x);
-      const yA = Math.max(boxA.y, boxB.y);
-      const xB = Math.min(boxA.x + boxA.width, boxB.x + boxB.width);
-      const yB = Math.min(boxA.y + boxA.height, boxB.y + boxB.height);
-
+    const iou = (a, b) => {
+      const xA = Math.max(a.x, b.x);
+      const yA = Math.max(a.y, b.y);
+      const xB = Math.min(a.x + a.width, b.x + b.width);
+      const yB = Math.min(a.y + a.height, b.y + b.height);
       const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
-      const boxAArea = boxA.width * boxA.height;
-      const boxBArea = boxB.width * boxB.height;
-
+      const boxAArea = a.width * a.height;
+      const boxBArea = b.width * b.height;
       return interArea / (boxAArea + boxBArea - interArea);
     };
 
     while (boxes.length > 0) {
       const current = boxes.shift();
       selected.push(current);
-      boxes = boxes.filter((box) => iou(current, box) < threshold);
+      boxes = boxes.filter((b) => iou(current, b) < threshold);
     }
 
     return selected;
@@ -125,7 +113,7 @@ async function processImage(filePath) {
     throw error;
   } finally {
     try {
-      fs.unlinkSync(filePath); // Clean up upload
+      fs.unlinkSync(filePath);
     } catch {}
   }
 }
