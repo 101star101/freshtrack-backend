@@ -18,7 +18,7 @@ class ImageProcessor {
       console.log(`📦 Loading YOLO model from: ${MODEL_PATH}`);
       try {
         this.model = await ort.InferenceSession.create(MODEL_PATH, {
-          executionProviders: ["cpuExecutionProvider"], // safer for Render
+          executionProviders: ["cpuExecutionProvider"], // safe for Render
         });
         console.log("✅ YOLO model loaded successfully!");
       } catch (err) {
@@ -131,7 +131,13 @@ class ImageProcessor {
 
 const imageProcessor = new ImageProcessor();
 
-// ✅ Main export used in server.js
+// ✅ Preload model for Render startup
+async function preloadModel() {
+  await imageProcessor.loadModel();
+  console.log("🧠 Model preloaded successfully (Render ready).");
+}
+
+// ✅ Main export
 async function processImage(filePath) {
   try {
     const detections = await imageProcessor.detectObjects(filePath);
@@ -149,4 +155,4 @@ async function processImage(filePath) {
   }
 }
 
-module.exports = { processImage };
+module.exports = { processImage, preloadModel };

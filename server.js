@@ -12,8 +12,6 @@ const { processImage, preloadModel } = require('./services/imageProcessor');
 const { getStorageData } = require('./services/storageService');
 
 const app = express();
-
-// Use Railway or local port
 const PORT = process.env.PORT || 3000;
 
 // ===================
@@ -59,8 +57,6 @@ const upload = multer({
 // ===================
 // Routes
 // ===================
-
-// Root info route
 app.get('/', (req, res) => {
   res.json({
     message: '🍏 FreshTrack Backend API',
@@ -75,40 +71,13 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check (for Railway monitoring)
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Debug info
-app.get('/api/test', (req, res) => {
-  try {
-    res.json({
-      message: '✅ Test endpoint working',
-      timestamp: new Date().toISOString(),
-      env: {
-        NODE_ENV: process.env.NODE_ENV,
-        PORT: process.env.PORT,
-        MODEL_PATH: process.env.MODEL_PATH
-      },
-      platform: {
-        nodeVersion: process.version,
-        platform: process.platform,
-        arch: process.arch
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Test endpoint failed', details: error.message });
-  }
-});
-
-// ===================
-// Image detection route
-// ===================
 app.post('/api/detect', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No image file provided' });
-
     console.log('🖼️ Received image:', req.file.filename);
 
     const detections = await processImage(req.file.path);
@@ -123,19 +92,12 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
       count: enriched.length,
       timestamp: new Date().toISOString()
     });
-
   } catch (error) {
     console.error('❌ Detection error:', error);
-    res.status(500).json({
-      error: 'Failed to process image',
-      details: error.message
-    });
+    res.status(500).json({ error: 'Failed to process image', details: error.message });
   }
 });
 
-// ===================
-// Storage info routes
-// ===================
 app.get('/api/storage/:item', (req, res) => {
   try {
     const item = req.params.item.toLowerCase();
@@ -157,24 +119,12 @@ app.get('/api/storage', (req, res) => {
 });
 
 // ===================
-// Error handling
-// ===================
-app.use((err, req, res, next) => {
-  console.error('💥 Internal error:', err);
-  res.status(500).json({ error: 'Internal server error', details: err.message });
-});
-
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
-});
-
-// ===================
-// Graceful startup + shutdown
+// Startup
 // ===================
 async function startServer() {
   try {
     console.log('🧠 Preloading YOLO model...');
-    await preloadModel(); // preload model before accepting requests
+    await preloadModel();
     console.log('✅ Model ready.');
 
     const server = app.listen(PORT, () => {
@@ -182,7 +132,6 @@ async function startServer() {
       console.log(`✅ Health: http://localhost:${PORT}/health`);
     });
 
-    // Graceful shutdown
     process.on('SIGTERM', () => {
       console.log('🛑 SIGTERM received, shutting down gracefully...');
       server.close(() => {
@@ -190,7 +139,6 @@ async function startServer() {
         process.exit(0);
       });
     });
-
   } catch (err) {
     console.error('❌ Startup failed:', err);
     process.exit(1);
