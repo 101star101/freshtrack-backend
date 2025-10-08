@@ -1,4 +1,4 @@
-const ort = require("onnxruntime-node");
+const ort = require('onnxruntime-web');
 const Jimp = require("jimp");
 const path = require("path");
 const fs = require("fs");
