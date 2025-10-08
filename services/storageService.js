@@ -1,7 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-// Default storage data for fresh and rotten food items
+// ==============================
+// Default storage data
+// ==============================
 const DEFAULT_STORAGE_DATA = {
   // Fresh Fruits
   "Fresh_Apple": {
@@ -44,7 +46,7 @@ const DEFAULT_STORAGE_DATA = {
     "status": "Fresh",
     "waste_disposal": null
   },
-  
+
   // Fresh Vegetables
   "Fresh_Potato": {
     "storage": "Store in cool, dark, dry place",
@@ -86,7 +88,7 @@ const DEFAULT_STORAGE_DATA = {
     "status": "Fresh",
     "waste_disposal": null
   },
-  
+
   // Fresh Meats
   "Fresh_Beef": {
     "storage": "Refrigerate at 32-40°F (0-4°C)",
@@ -112,8 +114,8 @@ const DEFAULT_STORAGE_DATA = {
     "status": "Fresh",
     "waste_disposal": null
   },
-  
-  // Rotten Fruits
+
+  // Rotten Items
   "Rotten_Apple": {
     "storage": "DISPOSE IMMEDIATELY",
     "shelf_life": 0,
@@ -154,50 +156,6 @@ const DEFAULT_STORAGE_DATA = {
     "status": "Rotten",
     "waste_disposal": "Compost if no mold, otherwise dispose in sealed bag in trash"
   },
-  
-  // Rotten Vegetables
-  "Rotten_Potato": {
-    "storage": "DISPOSE IMMEDIATELY",
-    "shelf_life": 0,
-    "tips": "Do not consume - dispose safely",
-    "signs_of_spoilage": "Green spots, soft spots, mold, strong odor",
-    "status": "Rotten",
-    "waste_disposal": "Compost if no mold, otherwise dispose in sealed bag in trash"
-  },
-  "Rotten_Carrot": {
-    "storage": "DISPOSE IMMEDIATELY",
-    "shelf_life": 0,
-    "tips": "Do not consume - dispose safely",
-    "signs_of_spoilage": "Soft texture, white spots, mold, strong odor",
-    "status": "Rotten",
-    "waste_disposal": "Compost if no mold, otherwise dispose in sealed bag in trash"
-  },
-  "Rotten_Pepper": {
-    "storage": "DISPOSE IMMEDIATELY",
-    "shelf_life": 0,
-    "tips": "Do not consume - dispose safely",
-    "signs_of_spoilage": "Mold, soft spots, wrinkled skin, strong odor",
-    "status": "Rotten",
-    "waste_disposal": "Compost if no mold, otherwise dispose in sealed bag in trash"
-  },
-  "Rotten_Cucumber": {
-    "storage": "DISPOSE IMMEDIATELY",
-    "shelf_life": 0,
-    "tips": "Do not consume - dispose safely",
-    "signs_of_spoilage": "Mold, soft spots, wrinkled skin, strong odor",
-    "status": "Rotten",
-    "waste_disposal": "Compost if no mold, otherwise dispose in sealed bag in trash"
-  },
-  "Rotten_Okra": {
-    "storage": "DISPOSE IMMEDIATELY",
-    "shelf_life": 0,
-    "tips": "Do not consume - dispose safely",
-    "signs_of_spoilage": "Soft texture, mold, wrinkled skin, strong odor",
-    "status": "Rotten",
-    "waste_disposal": "Compost if no mold, otherwise dispose in sealed bag in trash"
-  },
-  
-  // Rotten Meats
   "Rotten_Beef": {
     "storage": "DISPOSE IMMEDIATELY",
     "shelf_life": 0,
@@ -224,6 +182,9 @@ const DEFAULT_STORAGE_DATA = {
   }
 };
 
+// ==============================
+// StorageService Class
+// ==============================
 class StorageService {
   constructor() {
     this.storageDataPath = path.join(__dirname, '../data/storage_data.json');
@@ -236,13 +197,9 @@ class StorageService {
         const data = fs.readFileSync(this.storageDataPath, 'utf8');
         return JSON.parse(data);
       } else {
-        // Create data directory if it doesn't exist
         const dataDir = path.dirname(this.storageDataPath);
-        if (!fs.existsSync(dataDir)) {
-          fs.mkdirSync(dataDir, { recursive: true });
-        }
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-        // Write default data
         fs.writeFileSync(this.storageDataPath, JSON.stringify(DEFAULT_STORAGE_DATA, null, 2));
         return DEFAULT_STORAGE_DATA;
       }
@@ -252,36 +209,51 @@ class StorageService {
     }
   }
 
+  // ✅ Normalize label to match stored keys
+  normalizeLabel(label) {
+    if (!label) return '';
+
+    let formatted = label.trim();
+    if (formatted.toLowerCase().startsWith('fresh_'))
+      formatted = 'Fresh_' + formatted.slice(6);
+    else if (formatted.toLowerCase().startsWith('rotten_'))
+      formatted = 'Rotten_' + formatted.slice(7);
+
+    const parts = formatted.split('_');
+    if (parts.length > 1) {
+      parts[1] = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+      formatted = parts.join('_');
+    }
+
+    return formatted;
+  }
+
+  // ✅ Safe lookup
   getStorageData(itemName) {
     if (!itemName || typeof itemName !== 'string') {
       console.warn('⚠️ Invalid itemName passed to getStorageData:', itemName);
-      return DEFAULT_STORAGE_DATA.unknown;
+      return null;
     }
 
-    const normalizedName = itemName.toLowerCase().trim();
+    const normalizedName = this.normalizeLabel(itemName);
 
-    // Direct match
-    if (this.storageData[normalizedName]) {
-      return this.storageData[normalizedName];
-    }
+    if (this.storageData[normalizedName]) return this.storageData[normalizedName];
 
-    // Partial match
     for (const [key, value] of Object.entries(this.storageData)) {
-      if (key.includes(normalizedName) || normalizedName.includes(key)) {
-        return value;
-      }
+      if (key.toLowerCase() === normalizedName.toLowerCase()) return value;
     }
 
-    // Default for unknown
-    return DEFAULT_STORAGE_DATA.unknown;
+    console.warn(`⚠️ No storage data found for "${itemName}"`);
+    return null;
   }
 
   calculateRemainingLife(itemName, detectionDate) {
     const storageInfo = this.getStorageData(itemName);
+    if (!storageInfo) return null;
+
     const detectionTime = new Date(detectionDate);
     const currentTime = new Date();
-    const timeElapsed = Math.floor((currentTime - detectionTime) / (1000 * 60 * 60 * 24)); // in days
-
+    const timeElapsed = Math.floor((currentTime - detectionTime) / (1000 * 60 * 60 * 24));
     const remainingLife = Math.max(0, storageInfo.shelf_life - timeElapsed);
 
     return {
@@ -292,56 +264,18 @@ class StorageService {
     };
   }
 
-  updateStorageData(itemName, newData) {
-    if (!itemName || typeof itemName !== 'string') {
-      console.error('❌ Cannot update storage data: invalid itemName', itemName);
-      return false;
-    }
-
-    const normalizedName = itemName.toLowerCase().trim();
-    this.storageData[normalizedName] = { ...this.storageData[normalizedName], ...newData };
-
-    try {
-      fs.writeFileSync(this.storageDataPath, JSON.stringify(this.storageData, null, 2));
-      return true;
-    } catch (error) {
-      console.error('❌ Error updating storage data:', error);
-      return false;
-    }
-  }
-
   getAllStorageData() {
     return this.storageData;
   }
-
-  searchItems(query) {
-    if (!query || typeof query !== 'string') return [];
-
-    const normalizedQuery = query.toLowerCase().trim();
-    const results = [];
-
-    for (const [key, value] of Object.entries(this.storageData)) {
-      if (
-        key.includes(normalizedQuery) ||
-        value.storage.toLowerCase().includes(normalizedQuery) ||
-        value.tips.toLowerCase().includes(normalizedQuery)
-      ) {
-        results.push({ item: key, ...value });
-      }
-    }
-
-    return results;
-  }
 }
 
+// ==============================
+// Exports
+// ==============================
 const storageService = new StorageService();
-
-function getStorageData(itemName) {
-  return storageService.getStorageData(itemName);
-}
 
 module.exports = {
   StorageService,
-  getStorageData,
+  getStorageData: (itemName) => storageService.getStorageData(itemName),
   storageService
 };
