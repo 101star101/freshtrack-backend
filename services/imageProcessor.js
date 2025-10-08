@@ -1,6 +1,6 @@
 // services/imageProcessor.js
 const fs = require("fs");
-const ort = require("onnxruntime-node");
+const ort = require("onnxruntime-web"); // ✅ use WebAssembly backend
 const path = require("path");
 
 const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, "../models/best.onnx");
@@ -12,15 +12,13 @@ class ImageProcessor {
     this.model = null;
   }
 
-  // ✅ Load ONNX model once
+  // ✅ Load ONNX model once (WebAssembly backend)
   async loadModel() {
     if (!this.model) {
       console.log(`📦 Loading YOLO model from: ${MODEL_PATH}`);
       try {
-        this.model = await ort.InferenceSession.create(MODEL_PATH, {
-          executionProviders: ["cpuExecutionProvider"], // safe for Render
-        });
-        console.log("✅ YOLO model loaded successfully!");
+        this.model = await ort.InferenceSession.create(MODEL_PATH); // wasm auto
+        console.log("✅ YOLO model loaded successfully (WebAssembly backend)!");
       } catch (err) {
         console.error("❌ Failed to load ONNX model:", err);
         throw new Error(`Cannot load ONNX model at ${MODEL_PATH}`);
@@ -131,13 +129,7 @@ class ImageProcessor {
 
 const imageProcessor = new ImageProcessor();
 
-// ✅ Preload model for Render startup
-async function preloadModel() {
-  await imageProcessor.loadModel();
-  console.log("🧠 Model preloaded successfully (Render ready).");
-}
-
-// ✅ Main export
+// ✅ Main export used in server.js
 async function processImage(filePath) {
   try {
     const detections = await imageProcessor.detectObjects(filePath);
@@ -153,6 +145,11 @@ async function processImage(filePath) {
       // ignore cleanup errors
     }
   }
+}
+
+// ✅ Optional: Preload model for faster cold starts
+async function preloadModel() {
+  await imageProcessor.loadModel();
 }
 
 module.exports = { processImage, preloadModel };
