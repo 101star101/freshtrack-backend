@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-const { processImage } = require('./services/imageProcessor');
+const { processImage, preloadModel } = require('./services/imageProcessor');
 const { getStorageData } = require('./services/storageService');
 
 const app = express();
@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 app.use(morgan('combined'));
 app.use(cors({
-  origin: '*',
+  origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -49,7 +49,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Only image files are allowed!'), false);
@@ -64,7 +64,7 @@ const upload = multer({
 app.get('/', (req, res) => {
   res.json({
     message: '🍏 FreshTrack Backend API',
-    version: '2.0.0',
+    version: '2.1.0',
     status: 'Running',
     endpoints: {
       '/api/detect': 'POST - Detect food freshness in an uploaded image',
@@ -89,8 +89,7 @@ app.get('/api/test', (req, res) => {
       env: {
         NODE_ENV: process.env.NODE_ENV,
         PORT: process.env.PORT,
-        MODEL_PATH: process.env.MODEL_PATH,
-        FORCE_MOCK_MODE: process.env.FORCE_MOCK_MODE
+        MODEL_PATH: process.env.MODEL_PATH
       },
       platform: {
         nodeVersion: process.version,
@@ -112,10 +111,7 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
 
     console.log('🖼️ Received image:', req.file.filename);
 
-    // Process image with model or mock
     const detections = await processImage(req.file.path);
-
-    // Enrich with storage info
     const enriched = detections.map(det => ({
       ...det,
       storage: getStorageData(det.label)
@@ -173,9 +169,32 @@ app.use('*', (req, res) => {
 });
 
 // ===================
-// Start server
+// Graceful startup + shutdown
 // ===================
-app.listen(PORT, () => {
-  console.log(`🚀 FreshTrack Backend running on port ${PORT}`);
-  console.log(`✅ Health: http://localhost:${PORT}/health`);
-});
+async function startServer() {
+  try {
+    console.log('🧠 Preloading YOLO model...');
+    await preloadModel(); // preload model before accepting requests
+    console.log('✅ Model ready.');
+
+    const server = app.listen(PORT, () => {
+      console.log(`🚀 FreshTrack Backend running on port ${PORT}`);
+      console.log(`✅ Health: http://localhost:${PORT}/health`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('🛑 SIGTERM received, shutting down gracefully...');
+      server.close(() => {
+        console.log('👋 Server closed.');
+        process.exit(0);
+      });
+    });
+
+  } catch (err) {
+    console.error('❌ Startup failed:', err);
+    process.exit(1);
+  }
+}
+
+startServer();
