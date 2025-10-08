@@ -1,4 +1,3 @@
-// services/imageProcessor.js
 const fs = require("fs");
 const path = require("path");
 
@@ -35,12 +34,16 @@ class ImageProcessor {
 
     console.log("🖼️ Preprocessing image:", imagePath);
     const image = await Jimp.read(imagePath);
-    await image.resize(640, 640);
 
-    const input = new Float32Array(3 * 640 * 640);
+    // ✅ Resize to match model input size
+    const size = 416;
+    await image.resize(size, size);
+
+    // ✅ Adjust tensor size
+    const input = new Float32Array(3 * size * size);
     let i = 0;
-    for (let y = 0; y < 640; y++) {
-      for (let x = 0; x < 640; x++) {
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
         const pixel = image.getPixelColor(x, y);
         const rgba = Jimp.intToRGBA(pixel);
         input[i++] = rgba.r / 255;
@@ -49,7 +52,8 @@ class ImageProcessor {
       }
     }
 
-    return new ort.Tensor("float32", input, [1, 3, 640, 640]);
+    // ✅ Match tensor dimensions to 416x416
+    return new ort.Tensor("float32", input, [1, 3, size, size]);
   }
 
   async detectObjects(imagePath) {
