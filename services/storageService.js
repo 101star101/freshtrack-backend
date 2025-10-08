@@ -241,51 +241,49 @@ class StorageService {
         if (!fs.existsSync(dataDir)) {
           fs.mkdirSync(dataDir, { recursive: true });
         }
-        
+
         // Write default data
         fs.writeFileSync(this.storageDataPath, JSON.stringify(DEFAULT_STORAGE_DATA, null, 2));
         return DEFAULT_STORAGE_DATA;
       }
     } catch (error) {
-      console.error('Error loading storage data:', error);
+      console.error('❌ Error loading storage data:', error);
       return DEFAULT_STORAGE_DATA;
     }
   }
 
   getStorageData(itemName) {
+    if (!itemName || typeof itemName !== 'string') {
+      console.warn('⚠️ Invalid itemName passed to getStorageData:', itemName);
+      return DEFAULT_STORAGE_DATA.unknown;
+    }
+
     const normalizedName = itemName.toLowerCase().trim();
-    
+
     // Direct match
     if (this.storageData[normalizedName]) {
       return this.storageData[normalizedName];
     }
-    
+
     // Partial match
     for (const [key, value] of Object.entries(this.storageData)) {
       if (key.includes(normalizedName) || normalizedName.includes(key)) {
         return value;
       }
     }
-    
-    // Return default for unknown items
-    return {
-      "storage": "Store in cool, dry place",
-      "shelf_life": 7,
-      "tips": "Check regularly for signs of spoilage",
-      "signs_of_spoilage": "Mold, soft spots, off odor",
-      "status": "Unknown",
-      "waste_disposal": null
-    };
+
+    // Default for unknown
+    return DEFAULT_STORAGE_DATA.unknown;
   }
 
   calculateRemainingLife(itemName, detectionDate) {
     const storageInfo = this.getStorageData(itemName);
     const detectionTime = new Date(detectionDate);
     const currentTime = new Date();
-    const timeElapsed = Math.floor((currentTime - detectionTime) / (1000 * 60 * 60 * 24)); // Days
-    
+    const timeElapsed = Math.floor((currentTime - detectionTime) / (1000 * 60 * 60 * 24)); // in days
+
     const remainingLife = Math.max(0, storageInfo.shelf_life - timeElapsed);
-    
+
     return {
       ...storageInfo,
       remaining_life: remainingLife,
@@ -295,14 +293,19 @@ class StorageService {
   }
 
   updateStorageData(itemName, newData) {
+    if (!itemName || typeof itemName !== 'string') {
+      console.error('❌ Cannot update storage data: invalid itemName', itemName);
+      return false;
+    }
+
     const normalizedName = itemName.toLowerCase().trim();
     this.storageData[normalizedName] = { ...this.storageData[normalizedName], ...newData };
-    
+
     try {
       fs.writeFileSync(this.storageDataPath, JSON.stringify(this.storageData, null, 2));
       return true;
     } catch (error) {
-      console.error('Error updating storage data:', error);
+      console.error('❌ Error updating storage data:', error);
       return false;
     }
   }
@@ -312,17 +315,21 @@ class StorageService {
   }
 
   searchItems(query) {
+    if (!query || typeof query !== 'string') return [];
+
     const normalizedQuery = query.toLowerCase().trim();
     const results = [];
-    
+
     for (const [key, value] of Object.entries(this.storageData)) {
-      if (key.includes(normalizedQuery) || 
-          value.storage.toLowerCase().includes(normalizedQuery) ||
-          value.tips.toLowerCase().includes(normalizedQuery)) {
+      if (
+        key.includes(normalizedQuery) ||
+        value.storage.toLowerCase().includes(normalizedQuery) ||
+        value.tips.toLowerCase().includes(normalizedQuery)
+      ) {
         results.push({ item: key, ...value });
       }
     }
-    
+
     return results;
   }
 }
