@@ -1,11 +1,41 @@
 const fs = require("fs");
 const path = require("path");
-
-// Use web-compatible ONNX runtime
 const ort = require("onnxruntime-web");
+
+// Path and constants
 const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, "../models/best.onnx");
 const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.5;
 const NMS_THRESHOLD = parseFloat(process.env.NMS_THRESHOLD) || 0.4;
+
+// ✅ Class names (make sure they match your training order)
+const CLASS_NAMES = [
+  "Fresh_Apple",
+  "Fresh_Banana",
+  "Fresh_Beef",
+  "Fresh_Carrot",
+  "Fresh_Chicken",
+  "Fresh_Cucumber",
+  "Fresh_Manggo",
+  "Fresh_Okra",
+  "Fresh_Orange",
+  "Fresh_Pepper",
+  "Fresh_Pork",
+  "Fresh_Potato",
+  "Fresh_Strawberry",
+  "Rotten_Apple",
+  "Rotten_Banana",
+  "Rotten_Beef",
+  "Rotten_Carrot",
+  "Rotten_Chicken",
+  "Rotten_Cucumber",
+  "Rotten_Manggo",
+  "Rotten_Okra",
+  "Rotten_Orange",
+  "Rotten_Pepper",
+  "Rotten_Pork",
+  "Rotten_Potato",
+  "Rotten_Strawberry",
+];
 
 class ImageProcessor {
   constructor() {
@@ -35,11 +65,9 @@ class ImageProcessor {
     console.log("🖼️ Preprocessing image:", imagePath);
     const image = await Jimp.read(imagePath);
 
-    // ✅ Resize to match model input size
     const size = 416;
     await image.resize(size, size);
 
-    // ✅ Adjust tensor size
     const input = new Float32Array(3 * size * size);
     let i = 0;
     for (let y = 0; y < size; y++) {
@@ -52,7 +80,6 @@ class ImageProcessor {
       }
     }
 
-    // ✅ Match tensor dimensions to 416x416
     return new ort.Tensor("float32", input, [1, 3, size, size]);
   }
 
@@ -85,7 +112,30 @@ class ImageProcessor {
       const w = data[offset + 2];
       const h = data[offset + 3];
       const conf = data[offset + 4];
-      if (conf >= CONFIDENCE_THRESHOLD) detections.push({ x, y, width: w, height: h, confidence: conf });
+
+      if (conf >= CONFIDENCE_THRESHOLD) {
+        let bestClass = null;
+        let bestScore = 0;
+
+        for (let j = 5; j < numAttributes; j++) {
+          if (data[offset + j] > bestScore) {
+            bestScore = data[offset + j];
+            bestClass = j - 5;
+          }
+        }
+
+        const label = CLASS_NAMES[bestClass] || `class_${bestClass}`;
+
+        detections.push({
+          x,
+          y,
+          width: w,
+          height: h,
+          confidence: conf,
+          class_id: bestClass,
+          label,
+        });
+      }
     }
 
     return this.nonMaxSuppression(detections, NMS_THRESHOLD);
