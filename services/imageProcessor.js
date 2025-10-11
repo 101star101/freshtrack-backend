@@ -1,13 +1,14 @@
 const fs = require("fs");
 const path = require("path");
 const ort = require("onnxruntime-web");
+const { getStorageData } = require("./storageService");
 
 // Path and constants
 const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, "../models/best.onnx");
 const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.5;
 const NMS_THRESHOLD = parseFloat(process.env.NMS_THRESHOLD) || 0.4;
 
-// ✅ Class names (make sure they match your training order)
+// ✅ Class names (must match YOLO training order)
 const CLASS_NAMES = [
   "Fresh_Apple",
   "Fresh_Banana",
@@ -124,7 +125,9 @@ class ImageProcessor {
           }
         }
 
-        const label = CLASS_NAMES[bestClass] || `class_${bestClass}`;
+        const label = CLASS_NAMES[bestClass] || `Unknown_${bestClass}`;
+        const storageInfo = getStorageData(label);
+        if (!storageInfo) console.warn(`⚠️ Missing storage info for ${label}`);
 
         detections.push({
           x,
@@ -134,6 +137,12 @@ class ImageProcessor {
           confidence: conf,
           class_id: bestClass,
           label,
+          storage_info: storageInfo || {
+            storage: "Unknown",
+            shelf_life: null,
+            tips: "No data available",
+            status: "Unknown",
+          },
         });
       }
     }
@@ -170,17 +179,35 @@ class ImageProcessor {
 const imageProcessor = new ImageProcessor();
 
 async function processImage(filePath) {
+  const detectionDate = new Date().toISOString();
   try {
     const detections = await imageProcessor.detectObjects(filePath);
-    console.log(`✅ Detection complete: ${detections.length} objects found`);
-    return detections;
+
+    // ✅ Add calculated shelf life data
+    const enriched = detections.map((det) => {
+      const info = det.storage_info;
+      if (info && info.shelf_life) {
+        const daysElapsed = 0;
+        return {
+          ...det,
+          detection_date: detectionDate,
+          remaining_life: info.shelf_life - daysElapsed,
+        };
+      }
+      return det;
+    });
+
+    console.log(`✅ Detection complete: ${enriched.length} objects found`);
+    return enriched;
   } catch (error) {
     console.error("❌ Error during YOLO detection:", error);
     throw error;
   } finally {
     try {
       fs.unlinkSync(filePath);
-    } catch {}
+    } catch {
+      console.info(`ℹ️ Uploaded file already deleted or missing: ${filePath}`);
+    }
   }
 }
 
