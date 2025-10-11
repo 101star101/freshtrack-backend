@@ -11,77 +11,128 @@ const { processImage } = require('./services/imageProcessor');
 const { getStorageData } = require('./services/storageService');
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-// Middleware
+// Middlewares
 app.use(cors());
+app.use(express.json());
 app.use(helmet());
 app.use(morgan('dev'));
-app.use(express.json());
 
-// Multer setup
-const upload = multer({ dest: 'uploads/' });
+// File upload setup
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// Routes
-app.get('/', (req, res) => {
-  res.json({ message: '🟢 FreshTrack Backend is running!' });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
 });
 
-app.post('/analyze', upload.single('image'), async (req, res) => {
+const upload = multer({ storage });
+
+// Health check
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date(),
+  });
+});
+
+// ✅ Food detection route (with /api prefix)
+app.post('/api/detect', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No image uploaded.' });
+      return res.status(400).json({ success: false, message: 'No image uploaded' });
     }
 
-    const imagePath = path.resolve(req.file.path);
-    const results = await processImage(imagePath);
+    console.log('🖼️ Received image:', req.file.filename);
+    const imagePath = req.file.path;
 
-    // ✅ Clean up uploaded image after processing
-    fs.unlink(imagePath, (err) => {
-      if (err) console.warn('⚠️ Failed to delete uploaded file:', err.message);
-    });
+    // Process image for detections
+    console.log('🖼️ Preprocessing image:', imagePath);
+    const detections = await processImage(imagePath);
 
-    // ✅ Add fallback if storage data is missing
-    const enhancedResults = results.map((item) => {
-      const storageInfo = getStorageData(item.class);
+    console.log(`✅ Detection complete: ${detections.length} objects found`);
 
-      if (!storageInfo) {
-        console.warn(`⚠️ No storage data found for: ${item.class}`);
+    // Delete image after processing (optional)
+    try {
+      fs.unlinkSync(imagePath);
+    } catch (err) {
+      console.warn('⚠️ Failed to delete uploaded file:', err.message);
+    }
 
-        return {
-          ...item,
-          storage_info: {
-            storage: 'Unknown - please verify manually',
-            shelf_life: 'N/A',
-            tips: 'No data available for this item',
-            status: 'Unknown',
-            waste_disposal: 'Dispose safely if unsure'
-          }
-        };
-      }
-
-      return { ...item, storage_info: storageInfo };
-    });
-
-    res.json({
+    return res.json({
       success: true,
-      message: 'Image analyzed successfully.',
-      detections: enhancedResults
+      detections,
+      timestamp: new Date(),
     });
   } catch (error) {
-    console.error('❌ Error processing image:', error);
-    res.status(500).json({
+    console.error('❌ Detection error:', error);
+    return res.status(500).json({
       success: false,
-      message: 'Internal server error during image processing.',
-      error: error.message
+      message: 'Error processing image',
+      error: error.message,
     });
   }
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// ✅ Get storage info for one item
+app.get('/api/storage/:itemName', async (req, res) => {
+  try {
+    const { itemName } = req.params;
+    if (!itemName) {
+      return res.status(400).json({ success: false, message: 'Item name required' });
+    }
+
+    console.log(`📦 Fetching storage info for: ${itemName}`);
+    const storageData = await getStorageData(itemName);
+
+    if (!storageData) {
+      return res.status(404).json({ success: false, message: 'Item not found' });
+    }
+
+    return res.json({
+      success: true,
+      storage: storageData,
+    });
+  } catch (error) {
+    console.error('❌ Storage info error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching storage info',
+      error: error.message,
+    });
+  }
 });
 
-// Server listen
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// ✅ Get all storage data
+app.get('/api/storage', async (req, res) => {
+  try {
+    console.log('📦 Fetching all storage data');
+    const allData = await getStorageData();
+    res.json({
+      success: true,
+      data: allData,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching all storage data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching all storage data',
+    });
+  }
+});
+
+// Default route
+app.get('/', (req, res) => {
+  res.send('🍏 FreshTrack backend is running successfully!');
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
