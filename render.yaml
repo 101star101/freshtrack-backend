@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: freshtrack-backend
+    env: docker
+    plan: free             # or use "starter" / "standard" for production
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: MODEL_PATH
+        value: /app/models/model.onnx  # adjust if your model path differs
+      - key: STORAGE_DATA_PATH
+        value: /app/data/storage.json   # optional, if you use local JSON storage
+
+    healthCheckPath: /health
+    numInstances: 1
+    region: singapore                  # change if you prefer a closer Render region

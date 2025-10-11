@@ -1,9 +1,9 @@
 # ==============================
-# 1️⃣ Base image
+# 1️⃣ Base Image
 # ==============================
 FROM node:20-slim
 
-# Install required system packages for ONNX Runtime and image processing
+# Install dependencies for image & ONNX processing
 RUN apt-get update && apt-get install -y \
     python3 \
     build-essential \
@@ -14,34 +14,37 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ==============================
-# 2️⃣ Set working directory
+# 2️⃣ Working Directory
 # ==============================
 WORKDIR /app
 
 # ==============================
-# 3️⃣ Copy package files
+# 3️⃣ Copy Package Files
 # ==============================
 COPY package*.json ./
 
-# Install production dependencies only
+# Install production dependencies
 RUN npm install --omit=dev
 
 # ==============================
-# 4️⃣ Copy app files
+# 4️⃣ Copy Application Files
 # ==============================
 COPY . .
 
+# ✅ Ensure .env is included
+COPY .env .env
+
+# Create necessary folders
+RUN mkdir -p models uploads data
+
 # ==============================
-# 5️⃣ Environment setup
+# 5️⃣ Environment Setup
 # ==============================
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Make sure model path exists
-RUN mkdir -p models uploads
-
 # ==============================
-# 6️⃣ Expose port and start
+# 6️⃣ Expose & Start
 # ==============================
 EXPOSE 3000
 CMD ["npm", "start"]

@@ -11,21 +11,31 @@ const { processImage } = require('./services/imageProcessor');
 const { getStorageData } = require('./services/storageService');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
 
-// Middleware
+// 🧩 Load environment variables with fallbacks
+const PORT = process.env.PORT || 3000;
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+const LOG_FORMAT = process.env.LOG_FORMAT || 'dev';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+
+// ==============================
+// 🌐 Middleware
+// ==============================
 app.use(helmet());
-app.use(cors());
-app.use(express.json());
-app.use(morgan('dev'));
+app.use(cors({ origin: CORS_ORIGIN }));
+app.use(express.json({ limit: process.env.MAX_UPLOAD_SIZE || '10mb' }));
+app.use(morgan(LOG_FORMAT));
 
-// Uploads folder setup
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+// ==============================
+// 📁 Uploads folder setup
+// ==============================
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// Multer setup for file uploads
+// ==============================
+// 📸 Multer setup
+// ==============================
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
     const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
     cb(null, uniqueName);
@@ -33,17 +43,20 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ✅ Health check route
+// ==============================
+// 💓 Health & Root routes
+// ==============================
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// ✅ Root route
 app.get('/', (req, res) => {
   res.send('🚀 FreshTrack Backend is running!');
 });
 
-// ✅ Detection route
+// ==============================
+// 🧠 Detection route
+// ==============================
 app.post('/api/detect', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -51,7 +64,7 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'No image uploaded.' });
     }
 
-    const imagePath = path.join(uploadDir, req.file.filename);
+    const imagePath = path.join(UPLOAD_DIR, req.file.filename);
     console.log(`🖼️ Preprocessing image: ${imagePath}`);
 
     // Run model detection
@@ -62,21 +75,18 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
       detection.storage = getStorageData(detection.label);
     }
 
-    // ✅ Response to client
     res.status(200).json({
       success: true,
       detections,
       timestamp: new Date().toISOString(),
     });
 
-    // 🧹 Safe cleanup of uploaded file
+    // 🧹 Safe cleanup
     if (fs.existsSync(imagePath)) {
-      try {
-        fs.unlinkSync(imagePath);
-        console.log(`🧼 Deleted uploaded file: ${imagePath}`);
-      } catch (err) {
-        console.warn('⚠️ Could not delete uploaded file:', err.message);
-      }
+      fs.unlink(imagePath, (err) => {
+        if (err) console.warn('⚠️ Could not delete uploaded file:', err.message);
+        else console.log(`🧼 Deleted uploaded file: ${imagePath}`);
+      });
     } else {
       console.log(`ℹ️ Uploaded file already deleted or missing: ${imagePath}`);
     }
@@ -86,14 +96,13 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
   }
 });
 
-// ✅ Storage data routes
+// ==============================
+// 🗂️ Storage routes
+// ==============================
 app.get('/api/storage/:itemName', (req, res) => {
   const { itemName } = req.params;
   const data = getStorageData(itemName);
-  if (!data) {
-    console.warn(`⚠️ No storage data found for: ${itemName}`);
-    return res.status(404).json({ success: false, message: 'Item not found' });
-  }
+  if (!data) return res.status(404).json({ success: false, message: 'Item not found' });
   res.json({ success: true, storage: data });
 });
 
@@ -107,32 +116,28 @@ app.get('/api/storage', (req, res) => {
   }
 });
 
-// 🕓 Auto cleanup of old uploads (every 24h)
+// ==============================
+// 🕓 Daily upload cleanup
+// ==============================
 setInterval(() => {
-  fs.readdir(uploadDir, (err, files) => {
-    if (err) {
-      console.error('Error reading uploads directory:', err);
-      return;
-    }
-
+  fs.readdir(UPLOAD_DIR, (err, files) => {
+    if (err) return console.error('Error reading uploads directory:', err);
     const now = Date.now();
     const DAY_MS = 24 * 60 * 60 * 1000;
-
     files.forEach((file) => {
-      const filePath = path.join(uploadDir, file);
+      const filePath = path.join(UPLOAD_DIR, file);
       fs.stat(filePath, (err, stats) => {
-        if (err) return;
-        if (now - stats.mtimeMs > DAY_MS) {
-          fs.unlink(filePath, (err) => {
-            if (!err) console.log(`🧽 Deleted old upload: ${file}`);
-          });
+        if (!err && now - stats.mtimeMs > DAY_MS) {
+          fs.unlink(filePath, () => console.log(`🧽 Deleted old upload: ${file}`));
         }
       });
     });
   });
 }, 24 * 60 * 60 * 1000);
 
-// ✅ Start server
+// ==============================
+// 🚀 Start server
+// ==============================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

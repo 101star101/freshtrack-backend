@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
 
 // ==============================
 // Default storage data
@@ -187,7 +188,8 @@ const DEFAULT_STORAGE_DATA = {
 // ==============================
 class StorageService {
   constructor() {
-    this.storageDataPath = path.join(__dirname, '../data/storage_data.json');
+    const defaultPath = path.join(__dirname, '../data/storage_data.json');
+    this.storageDataPath = process.env.STORAGE_PATH || defaultPath;
     this.storageData = this.loadStorageData();
   }
 
@@ -197,28 +199,29 @@ class StorageService {
         const data = fs.readFileSync(this.storageDataPath, 'utf8');
         return JSON.parse(data);
       } else {
-        const dataDir = path.dirname(this.storageDataPath);
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-
+        console.warn(`⚠️ Storage file not found. Creating new file at ${this.storageDataPath}`);
+        const dir = path.dirname(this.storageDataPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(this.storageDataPath, JSON.stringify(DEFAULT_STORAGE_DATA, null, 2));
         return DEFAULT_STORAGE_DATA;
       }
-    } catch (error) {
-      console.error('❌ Error loading storage data:', error);
+    } catch (err) {
+      console.error('❌ Error loading storage data:', err);
       return DEFAULT_STORAGE_DATA;
     }
   }
 
-  // ✅ Normalize label to match stored keys
   normalizeLabel(label) {
     if (!label) return '';
-
     let formatted = label.trim();
+
+    // Normalize prefixes
     if (formatted.toLowerCase().startsWith('fresh_'))
       formatted = 'Fresh_' + formatted.slice(6);
     else if (formatted.toLowerCase().startsWith('rotten_'))
       formatted = 'Rotten_' + formatted.slice(7);
 
+    // Capitalize second word
     const parts = formatted.split('_');
     if (parts.length > 1) {
       parts[1] = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
@@ -228,40 +231,22 @@ class StorageService {
     return formatted;
   }
 
-  // ✅ Safe lookup
   getStorageData(itemName) {
     if (!itemName || typeof itemName !== 'string') {
-      console.warn('⚠️ Invalid itemName passed to getStorageData:', itemName);
+      console.warn('⚠️ Invalid item name:', itemName);
       return null;
     }
 
-    const normalizedName = this.normalizeLabel(itemName);
+    const normalized = this.normalizeLabel(itemName);
 
-    if (this.storageData[normalizedName]) return this.storageData[normalizedName];
+    if (this.storageData[normalized]) return this.storageData[normalized];
 
     for (const [key, value] of Object.entries(this.storageData)) {
-      if (key.toLowerCase() === normalizedName.toLowerCase()) return value;
+      if (key.toLowerCase() === normalized.toLowerCase()) return value;
     }
 
     console.warn(`⚠️ No storage data found for "${itemName}"`);
     return null;
-  }
-
-  calculateRemainingLife(itemName, detectionDate) {
-    const storageInfo = this.getStorageData(itemName);
-    if (!storageInfo) return null;
-
-    const detectionTime = new Date(detectionDate);
-    const currentTime = new Date();
-    const timeElapsed = Math.floor((currentTime - detectionTime) / (1000 * 60 * 60 * 24));
-    const remainingLife = Math.max(0, storageInfo.shelf_life - timeElapsed);
-
-    return {
-      ...storageInfo,
-      remaining_life: remainingLife,
-      detection_date: detectionDate,
-      days_elapsed: timeElapsed
-    };
   }
 
   getAllStorageData() {
@@ -269,9 +254,6 @@ class StorageService {
   }
 }
 
-// ==============================
-// Exports
-// ==============================
 const storageService = new StorageService();
 
 module.exports = {

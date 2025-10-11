@@ -1,21 +1,10 @@
+const ort = require("onnxruntime-node");
+const sharp = require("sharp");
+const Jimp = require("jimp");
 const fs = require("fs");
 const path = require("path");
-const ort = require("onnxruntime-node"); // ✅ Use node version for backend
-let sharp;
 
-// Optional sharp load
-try {
-  sharp = require("sharp");
-} catch {
-  console.warn("⚠️ sharp not available — will use Jimp fallback");
-}
-
-// Paths and constants
-const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, "../models/best.onnx");
-const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.5;
-const NMS_THRESHOLD = parseFloat(process.env.NMS_THRESHOLD) || 0.4;
-
-// ✅ Class names (match your training order)
+const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, '../models/best.onnx');
 const CLASS_NAMES = [
   "Fresh_Apple", "Fresh_Banana", "Fresh_Beef", "Fresh_Carrot", "Fresh_Chicken",
   "Fresh_Cucumber", "Fresh_Manggo", "Fresh_Okra", "Fresh_Orange", "Fresh_Pepper",
@@ -25,163 +14,115 @@ const CLASS_NAMES = [
   "Rotten_Pork", "Rotten_Potato", "Rotten_Strawberry"
 ];
 
-class ImageProcessor {
-  constructor() {
-    this.model = null;
-    this.modelLoaded = false;
-  }
+let session = null;
 
-  // ✅ Load YOLO model only once
-  async loadModel() {
-    if (this.modelLoaded && this.model) return this.model;
-
+// Load ONNX model
+async function loadModel() {
+  if (!session) {
     console.log(`📦 Loading YOLO model from: ${MODEL_PATH}`);
-    try {
-      this.model = await ort.InferenceSession.create(MODEL_PATH);
-      this.modelLoaded = true;
-      console.log("✅ YOLO model loaded successfully!");
-    } catch (err) {
-      console.error("❌ Failed to load ONNX model:", err);
-      throw new Error(`Cannot load ONNX model at ${MODEL_PATH}`);
-    }
-    return this.model;
+    session = await ort.InferenceSession.create(MODEL_PATH, {
+      executionProviders: ["cpuExecutionProvider"],
+    });
+    console.log("✅ YOLO model loaded successfully!");
   }
+  return session;
+}
 
-  // ✅ Preprocess image to tensor
-  async preprocessImage(imagePath) {
-    console.log("🖼️ Preprocessing image:", imagePath);
-    const width = 416;
-    const height = 416;
-    let imageData;
+// Preprocess image → tensor
+async function preprocessImage(imagePath) {
+  console.log(`🖼️ Preprocessing image: ${imagePath}`);
 
-    if (sharp) {
-      try {
-        const img = await sharp(imagePath)
-          .resize(width, height, { fit: "fill" })
-          .ensureAlpha()
-          .removeAlpha()
-          .toColorspace("rgb")
-          .raw()
-          .toBuffer();
+  try {
+    const image = sharp(imagePath)
+      .resize(640, 640)
+      .toColorspace("srgb"); // ✅ Fix for Render/libvips issue
 
-        imageData = new Float32Array(width * height * 3);
-        for (let i = 0; i < img.length; i++) {
-          imageData[i] = img[i] / 255.0;
-        }
-      } catch (err) {
-        console.error("❌ sharp processing failed, fallback to Jimp:", err);
-        imageData = await this.jimpFallback(imagePath, width, height);
-      }
-    } else {
-      imageData = await this.jimpFallback(imagePath, width, height);
+    const buffer = await image.raw().toBuffer({ resolveWithObject: true });
+    const { data, info } = buffer;
+    const floatArray = new Float32Array(info.width * info.height * 3);
+
+    // Normalize pixels [0–1]
+    for (let i = 0; i < data.length; i++) {
+      floatArray[i] = data[i] / 255.0;
     }
 
-    return new ort.Tensor("float32", imageData, [1, 3, height, width]);
-  }
+    const tensor = new ort.Tensor("float32", floatArray, [1, 3, info.height, info.width]);
+    return tensor;
+  } catch (err) {
+    console.warn("❌ sharp processing failed, fallback to Jimp:", err.message);
+    const img = await Jimp.read(imagePath);
+    img.resize(640, 640);
+    const data = new Float32Array(3 * 640 * 640);
+    let idx = 0;
 
-  async jimpFallback(imagePath, width, height) {
-    const jimpModule = await import("jimp");
-    const Jimp = jimpModule.default;
-    const image = await Jimp.read(imagePath);
-    await image.resize(width, height);
-
-    const data = new Float32Array(3 * width * height);
-    let i = 0;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const { r, g, b } = Jimp.intToRGBA(image.getPixelColor(x, y));
-        data[i++] = r / 255;
-        data[i++] = g / 255;
-        data[i++] = b / 255;
+    for (let y = 0; y < 640; y++) {
+      for (let x = 0; x < 640; x++) {
+        const { r, g, b } = Jimp.intToRGBA(img.getPixelColor(x, y));
+        data[idx++] = r / 255.0;
+        data[idx++] = g / 255.0;
+        data[idx++] = b / 255.0;
       }
     }
-    return data;
-  }
-
-  // ✅ Run inference
-  async detectObjects(imagePath) {
-    const model = await this.loadModel();
-    const inputTensor = await this.preprocessImage(imagePath);
-
-    let results;
-    try {
-      results = await model.run({ images: inputTensor });
-    } catch (err) {
-      console.error("❌ Inference failed:", err);
-      throw new Error("ONNX inference failed");
-    }
-
-    const output = results[Object.keys(results)[0]];
-    return this.postprocess(output);
-  }
-
-  // ✅ Postprocess
-  postprocess(output) {
-    const data = output.data;
-    const [batch, numPredictions, numAttributes] = output.dims;
-    const detections = [];
-
-    for (let i = 0; i < numPredictions; i++) {
-      const offset = i * numAttributes;
-      const x = data[offset];
-      const y = data[offset + 1];
-      const w = data[offset + 2];
-      const h = data[offset + 3];
-      const conf = data[offset + 4];
-
-      if (conf >= CONFIDENCE_THRESHOLD) {
-        let bestClass = null;
-        let bestScore = 0;
-        for (let j = 5; j < numAttributes; j++) {
-          if (data[offset + j] > bestScore) {
-            bestScore = data[offset + j];
-            bestClass = j - 5;
-          }
-        }
-        const label = CLASS_NAMES[bestClass] || `Unknown_${bestClass}`;
-        detections.push({ x, y, width: w, height: h, confidence: conf, class_id: bestClass, label });
-      }
-    }
-
-    return this.nonMaxSuppression(detections, NMS_THRESHOLD);
-  }
-
-  nonMaxSuppression(boxes, threshold) {
-    if (boxes.length === 0) return [];
-    boxes.sort((a, b) => b.confidence - a.confidence);
-    const selected = [];
-
-    const iou = (a, b) => {
-      const xA = Math.max(a.x, b.x);
-      const yA = Math.max(a.y, b.y);
-      const xB = Math.min(a.x + a.width, b.x + b.width);
-      const yB = Math.min(a.y + a.height, b.y + b.height);
-      const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
-      const boxAArea = a.width * a.height;
-      const boxBArea = b.width * b.height;
-      return interArea / (boxAArea + boxBArea - interArea);
-    };
-
-    while (boxes.length > 0) {
-      const current = boxes.shift();
-      selected.push(current);
-      boxes = boxes.filter((b) => iou(current, b) < threshold);
-    }
-
-    return selected;
+    return new ort.Tensor("float32", data, [1, 3, 640, 640]);
   }
 }
 
-const imageProcessor = new ImageProcessor();
+// Postprocess YOLO output
+function postprocess(outputData, threshold = 0.25) {
+  const numDetections = outputData.length / (5 + CLASS_NAMES.length);
+  const detections = [];
 
+  for (let i = 0; i < numDetections; i++) {
+    const offset = i * (5 + CLASS_NAMES.length);
+    const x = outputData[offset];
+    const y = outputData[offset + 1];
+    const w = outputData[offset + 2];
+    const h = outputData[offset + 3];
+    const objectness = outputData[offset + 4];
+
+    let bestScore = 0;
+    let bestClass = -1;
+
+    // ✅ only consider valid class range
+    for (let j = 5; j < 5 + CLASS_NAMES.length; j++) {
+      if (j >= offset + (5 + CLASS_NAMES.length)) break;
+      if (outputData[offset + j] > bestScore) {
+        bestScore = outputData[offset + j];
+        bestClass = j - 5;
+      }
+    }
+
+    const score = objectness * bestScore;
+    if (score > threshold) {
+      detections.push({
+        className: CLASS_NAMES[bestClass] || "Unknown",
+        confidence: score.toFixed(2),
+        bbox: [x, y, w, h],
+      });
+    }
+  }
+  return detections;
+}
+
+// Main image processing
 async function processImage(filePath) {
+  const start = Date.now();
   try {
-    const detections = await imageProcessor.detectObjects(filePath);
-    console.log(`✅ Detection complete: ${detections.length} objects found`);
+    const model = await loadModel();
+    const tensor = await preprocessImage(filePath);
+    const feeds = { images: tensor };
+    const results = await model.run(feeds);
+
+    const output = results[Object.keys(results)[0]];
+    const detections = postprocess(output.data);
+
+    const duration = ((Date.now() - start) / 1000).toFixed(2);
+    console.log(`✅ Detection complete: ${detections.length} objects found in ${duration}s`);
+
     return detections;
-  } catch (error) {
-    console.error("❌ Detection error:", error);
-    throw error;
+  } catch (err) {
+    console.error("❌ Detection error:", err);
+    throw err;
   } finally {
     try {
       fs.unlinkSync(filePath);
@@ -191,8 +132,4 @@ async function processImage(filePath) {
   }
 }
 
-async function preloadModel() {
-  await imageProcessor.loadModel();
-}
-
-module.exports = { processImage, preloadModel };
+module.exports = { processImage };

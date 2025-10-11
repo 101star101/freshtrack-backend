@@ -1,0 +1,50 @@
+# Node dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# Build artifacts and caches
+dist
+build
+.cache
+coverage
+
+# Local uploads (will be created dynamically in container)
+uploads
+
+# Logs
+*.log
+logs/
+debug.log
+
+# System and editor files
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# Git
+.git
+.gitignore
+.gitmodules
+
+# Model training or large local data
+*.onnx
+*.pt
+*.weights
+*.zip
+*.tar
+*.tar.gz
+*.rar
+data/
+datasets/
+training/
+
+# Optional: keep only model file used in production
+!models/best.onnx
