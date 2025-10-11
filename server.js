@@ -13,126 +13,126 @@ const { getStorageData } = require('./services/storageService');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Middlewares
+// Middleware
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
-app.use(helmet());
 app.use(morgan('dev'));
 
-// File upload setup
+// Uploads folder setup
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
+// Multer setup for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
     cb(null, uniqueName);
   },
 });
-
 const upload = multer({ storage });
 
-// Health check
+// ✅ Health check route
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    uptime: process.uptime(),
-    timestamp: new Date(),
-  });
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// ✅ Food detection route (with /api prefix)
+// ✅ Root route
+app.get('/', (req, res) => {
+  res.send('🚀 FreshTrack Backend is running!');
+});
+
+// ✅ Detection route
 app.post('/api/detect', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No image uploaded' });
+      console.error('⚠️ No image uploaded.');
+      return res.status(400).json({ success: false, message: 'No image uploaded.' });
     }
 
-    console.log('🖼️ Received image:', req.file.filename);
-    const imagePath = req.file.path;
+    const imagePath = path.join(uploadDir, req.file.filename);
+    console.log(`🖼️ Preprocessing image: ${imagePath}`);
 
-    // Process image for detections
-    console.log('🖼️ Preprocessing image:', imagePath);
+    // Run model detection
     const detections = await processImage(imagePath);
 
-    console.log(`✅ Detection complete: ${detections.length} objects found`);
-
-    // Delete image after processing (optional)
-    try {
-      fs.unlinkSync(imagePath);
-    } catch (err) {
-      console.warn('⚠️ Failed to delete uploaded file:', err.message);
+    // Attach storage info
+    for (const detection of detections) {
+      detection.storage = getStorageData(detection.label);
     }
 
-    return res.json({
+    // ✅ Response to client
+    res.status(200).json({
       success: true,
       detections,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     });
+
+    // 🧹 Safe cleanup of uploaded file
+    if (fs.existsSync(imagePath)) {
+      try {
+        fs.unlinkSync(imagePath);
+        console.log(`🧼 Deleted uploaded file: ${imagePath}`);
+      } catch (err) {
+        console.warn('⚠️ Could not delete uploaded file:', err.message);
+      }
+    } else {
+      console.log(`ℹ️ Uploaded file already deleted or missing: ${imagePath}`);
+    }
   } catch (error) {
     console.error('❌ Detection error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error processing image',
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: 'Error processing image', error: error.message });
   }
 });
 
-// ✅ Get storage info for one item
-app.get('/api/storage/:itemName', async (req, res) => {
+// ✅ Storage data routes
+app.get('/api/storage/:itemName', (req, res) => {
+  const { itemName } = req.params;
+  const data = getStorageData(itemName);
+  if (!data) {
+    console.warn(`⚠️ No storage data found for: ${itemName}`);
+    return res.status(404).json({ success: false, message: 'Item not found' });
+  }
+  res.json({ success: true, storage: data });
+});
+
+app.get('/api/storage', (req, res) => {
   try {
-    const { itemName } = req.params;
-    if (!itemName) {
-      return res.status(400).json({ success: false, message: 'Item name required' });
+    const data = getStorageData();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('❌ Error fetching storage data:', error);
+    res.status(500).json({ success: false, message: 'Error fetching storage data' });
+  }
+});
+
+// 🕓 Auto cleanup of old uploads (every 24h)
+setInterval(() => {
+  fs.readdir(uploadDir, (err, files) => {
+    if (err) {
+      console.error('Error reading uploads directory:', err);
+      return;
     }
 
-    console.log(`📦 Fetching storage info for: ${itemName}`);
-    const storageData = await getStorageData(itemName);
+    const now = Date.now();
+    const DAY_MS = 24 * 60 * 60 * 1000;
 
-    if (!storageData) {
-      return res.status(404).json({ success: false, message: 'Item not found' });
-    }
-
-    return res.json({
-      success: true,
-      storage: storageData,
+    files.forEach((file) => {
+      const filePath = path.join(uploadDir, file);
+      fs.stat(filePath, (err, stats) => {
+        if (err) return;
+        if (now - stats.mtimeMs > DAY_MS) {
+          fs.unlink(filePath, (err) => {
+            if (!err) console.log(`🧽 Deleted old upload: ${file}`);
+          });
+        }
+      });
     });
-  } catch (error) {
-    console.error('❌ Storage info error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error fetching storage info',
-      error: error.message,
-    });
-  }
-});
+  });
+}, 24 * 60 * 60 * 1000);
 
-// ✅ Get all storage data
-app.get('/api/storage', async (req, res) => {
-  try {
-    console.log('📦 Fetching all storage data');
-    const allData = await getStorageData();
-    res.json({
-      success: true,
-      data: allData,
-    });
-  } catch (error) {
-    console.error('❌ Error fetching all storage data:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching all storage data',
-    });
-  }
-});
-
-// Default route
-app.get('/', (req, res) => {
-  res.send('🍏 FreshTrack backend is running successfully!');
-});
-
-// Start server
+// ✅ Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
